@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatbot Kantin — Versi Rentan (24781076)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+h1{color:#38bdf8;margin-bottom:4px;font-size:1.4rem}
+.subtitle{color:#94a3b8;font-size:.85rem;margin-bottom:18px}
+.badge-rentan{background:#ef4444;color:#fff;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:700;margin-left:8px;vertical-align:middle}
+.container{width:100%;max-width:640px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;color:#94a3b8;font-size:.8rem;margin-bottom:4px}
+input[type=password],input[type=text],select{width:100%;padding:8px 10px;border:1px solid #475569;border-radius:8px;background:#0f172a;color:#e2e8f0;font-size:.9rem;margin-bottom:8px}
+.menu-table{width:100%;border-collapse:collapse;margin-bottom:8px}
+.menu-table th{text-align:left;color:#38bdf8;font-size:.78rem;padding:4px 8px;border-bottom:1px solid #334155}
+.menu-table td{padding:4px 8px;font-size:.85rem;border-bottom:1px solid #1e293b}
+.chat-box{height:320px;overflow-y:auto;border:1px solid #334155;border-radius:8px;padding:10px;background:#0f172a;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.msg{padding:8px 12px;border-radius:10px;max-width:85%;word-wrap:break-word;font-size:.88rem;line-height:1.45}
+.msg.user{background:#1d4ed8;color:#fff;align-self:flex-end}
+.msg.bot{background:#334155;color:#e2e8f0;align-self:flex-start}
+.msg.system{background:#7f1d1d;color:#fca5a5;align-self:center;font-size:.78rem;text-align:center}
+.input-row{display:flex;gap:8px}
+.input-row input{flex:1}
+button{padding:8px 16px;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:background .2s}
+.btn-send{background:#2563eb;color:#fff}
+.btn-send:hover{background:#1d4ed8}
+.btn-export{background:#065f46;color:#fff;width:100%}
+.btn-export:hover{background:#047857}
+.btn-clear{background:#475569;color:#fff}
+.btn-clear:hover{background:#64748b}
+.actions-bar{display:flex;gap:8px;margin-top:8px}
+.actions-bar button{flex:1}
+.info{font-size:.75rem;color:#64748b;margin-top:6px;text-align:center}
+.aksi-tag{display:inline-block;background:#dc2626;color:#fff;font-size:.72rem;padding:1px 6px;border-radius:6px;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Chatbot Kantin Koperasi <span class="badge-rentan">RENTAN</span></h1>
+<p class="subtitle">P06-WEB-DUMMY &middot; LIVE-1 &middot; NPM 24781076</p>
+
+<div class="card">
+<label for="apiKey">API Key Gemini (tidak disimpan di source code)</label>
+<input type="password" id="apiKey" placeholder="Masukkan API key Gemini Anda">
+<label for="modelSelect">Model Gemini</label>
+<div style="display:flex;gap:6px">
+<select id="modelSelect" style="flex:1">
+<option value="gemini-2.0-flash">gemini-2.0-flash</option>
+<option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+<option value="gemini-1.5-flash">gemini-1.5-flash</option>
+<option value="gemini-1.5-pro">gemini-1.5-pro</option>
+</select>
+<button id="btnCheckModels" style="padding:6px 12px;background:#0ea5e9;color:#fff;border:none;border-radius:8px;font-size:.78rem;cursor:pointer;white-space:nowrap">Cek Model</button>
+</div>
+<p id="modelStatus" style="font-size:.72rem;color:#64748b;margin-top:4px"></p>
+</div>
+
+<div class="card">
+<label>Menu Kantin (data sintetis)</label>
+<table class="menu-table">
+<thead><tr><th>Menu</th><th>Harga</th></tr></thead>
+<tbody id="menuBody"></tbody>
+</table>
+</div>
+
+<div class="card">
+<label>Percakapan</label>
+<div class="chat-box" id="chatBox"></div>
+<div class="input-row">
+<input type="text" id="userInput" placeholder="Ketik pesan..." autocomplete="off">
+<button class="btn-send" id="btnSend">Kirim</button>
+</div>
+<div class="actions-bar">
+<button class="btn-clear" id="btnClear">Bersihkan Chat</button>
+<button class="btn-export" id="btnExport">Ekspor Log JSON</button>
+</div>
+<p class="info">Versi rentan: prompt digabung tanpa pemisahan peran. Aksi model langsung dijalankan.</p>
+</div>
+</div>
+
+<script>
+(function () {
+"use strict";
+
+/* ========== DATA SINTETIS ========== */
+var MENU_DATA = {
+  menu: [
+    { nama: "Nasi goreng", harga: 12000 },
+    { nama: "Es teh", harga: 4000 },
+    { nama: "Ayam geprek", harga: 15000 },
+    { nama: "Mie ayam", harga: 13000 },
+    { nama: "Jus jeruk", harga: 8000 }
+  ]
+};
+
+var LOG_APP = "P06-WEB-DUMMY";
+var LOG_KASUS = "LIVE-1";
+var LOG_NPM = "24781076";
+
+/* ========== LOG ========== */
+var logEntries = [];
+(function loadLog() {
+  try {
+    var raw = sessionStorage.getItem("p06-rentan-log");
+    if (raw) { logEntries = JSON.parse(raw); }
+  } catch (e) { /* sessionStorage tidak tersedia */ }
+})();
+
+function saveLog() {
+  try {
+    sessionStorage.setItem("p06-rentan-log", JSON.stringify(logEntries));
+  } catch (e) { /* abaikan */ }
+}
+
+function addLogEntry(pesan, konteks, balasan, aksi, pelanggaran) {
+  logEntries.push({
+    versi: "rentan",
+    waktu: new Date().toISOString(),
+    payload: pesan,
+    konteks: konteks,
+    balasan: balasan,
+    aksi: aksi,
+    pelanggaran: pelanggaran
+  });
+  saveLog();
+}
+
+/* ========== UI MENU ========== */
+var menuBody = document.getElementById("menuBody");
+MENU_DATA.menu.forEach(function (item) {
+  var tr = document.createElement("tr");
+  tr.innerHTML = "<td>" + item.nama + "</td><td>Rp" + item.harga.toLocaleString("id-ID") + "</td>";
+  menuBody.appendChild(tr);
+});
+
+/* ========== CHAT UI ========== */
+var chatBox = document.getElementById("chatBox");
+
+function appendMsg(text, cls) {
+  var div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.textContent = text;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function appendBotWithActions(balasan, aksiList) {
+  var div = document.createElement("div");
+  div.className = "msg bot";
+  div.textContent = balasan;
+  if (aksiList && aksiList.length > 0) {
+    aksiList.forEach(function (a) {
+      var tag = document.createElement("div");
+      tag.className = "aksi-tag";
+      tag.textContent = "AKSI: " + a.tool + " [" + a.status + "]";
+      div.appendChild(tag);
+    });
+  }
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+/* ========== PARSE AKSI DARI OUTPUT MODEL ========== */
+function parseAksi(text) {
+  var aksiList = [];
+  var regex = /AKSI\s*(\{[^}]+\})/g;
+  var match;
+  while ((match = regex.exec(text)) !== null) {
+    try {
+      var obj = JSON.parse(match[1]);
+      /* RENTAN: semua aksi langsung dijalankan tanpa validasi */
+      aksiList.push({
+        tool: obj.tool || "",
+        status: "dijalankan",
+        ref: obj.ref || ""
+      });
+    } catch (e) { /* abaikan JSON rusak */ }
+  }
+  return aksiList;
+}
+
+/* ========== PANGGIL GEMINI API ========== */
+/* Ambil nama model dari dropdown */
+function getSelectedModel() {
+  try {
+    var sel = document.getElementById("modelSelect");
+    return sel ? sel.value : "gemini-2.0-flash";
+  } catch (e) { return "gemini-2.0-flash"; }
+}
+
+async function callGemini(prompt) {
+  var apiKey = document.getElementById("apiKey").value.trim();
+  if (!apiKey) throw new Error("API key belum diisi.");
+
+  var modelName = getSelectedModel();
+  var url = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent";
+
+  var body = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+  var res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    var errBody = "";
+    try { var errJson = await res.json(); errBody = errJson.error && errJson.error.message ? errJson.error.message : JSON.stringify(errJson); } catch (e) { errBody = res.statusText || "Unknown error"; }
+    var customMsg = "";
+    if (res.status === 429) customMsg = " \n(INFO: Error 429 mengindikasikan Kuota API habis atau limit 0. Harap periksa halaman Usage and Billing atau Rate limits di Google AI Studio. Mengganti model tidak akan menyelesaikan masalah kuota project.)";
+    else if (res.status === 404) customMsg = " \n(INFO: Error 404 mengindikasikan Model tidak ditemukan. Silakan klik tombol 'Cek Model' untuk memilih model yang valid.)";
+    throw new Error("Gemini API error " + res.status + ": " + errBody + customMsg);
+  }
+
+  var data = await res.json();
+  try {
+    return data.candidates[0].content.parts[0].text;
+  } catch (e) {
+    var blockReason = "";
+    try { blockReason = data.candidates && data.candidates[0] && data.candidates[0].finishReason ? " (finishReason: " + data.candidates[0].finishReason + ")" : ""; } catch (e2) {}
+    throw new Error("Respons Gemini tidak dapat dibaca." + blockReason);
+  }
+}
+
+/* ========== CEK MODEL TERSEDIA ========== */
+document.getElementById("btnCheckModels").addEventListener("click", async function () {
+  var apiKey = document.getElementById("apiKey").value.trim();
+  var statusEl = document.getElementById("modelStatus");
+  if (!apiKey) { statusEl.textContent = "Masukkan API key terlebih dahulu."; statusEl.style.color = "#f87171"; return; }
+
+  statusEl.textContent = "Memuat daftar model...";
+  statusEl.style.color = "#94a3b8";
+
+  try {
+    var res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", {
+      headers: { "x-goog-api-key": apiKey }
+    });
+    if (!res.ok) { statusEl.textContent = "Gagal memuat: HTTP " + res.status; statusEl.style.color = "#f87171"; return; }
+
+    var data = await res.json();
+    var models = (data.models || []).filter(function (m) {
+      return m.supportedGenerationMethods && m.supportedGenerationMethods.indexOf("generateContent") !== -1;
+    });
+
+    var sel = document.getElementById("modelSelect");
+    sel.innerHTML = "";
+    var currentValue = getSelectedModel();
+    var foundCurrent = false;
+
+    models.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    models.forEach(function (m) {
+      var name = m.name.replace("models/", "");
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name + (m.displayName ? " (" + m.displayName + ")" : "");
+      sel.appendChild(opt);
+      if (name === currentValue) foundCurrent = true;
+    });
+
+    if (foundCurrent) {
+      sel.value = currentValue;
+    } else if (models.length > 0) {
+      // Jika model sebelumnya tidak tersedia (404), pilih otomatis model valid (memprioritaskan 1.5-flash)
+      var fallback = models.find(function(m) { return m.name.indexOf("gemini-1.5-flash") !== -1 || m.name.indexOf("gemini-3.8-flash") !== -1; }) || models[0];
+      sel.value = fallback.name.replace("models/", "");
+    }
+    statusEl.textContent = models.length + " model tersedia. Model valid telah diperbarui.";
+    statusEl.style.color = "#86efac";
+  } catch (e) {
+    statusEl.textContent = "Error: " + e.message;
+    statusEl.style.color = "#f87171";
+  }
+});
+
+/* ========== FUNGSI UTAMA — RENTAN ========== */
+/*
+ * KERENTANAN:
+ * 1. System prompt dan user message DIGABUNG menjadi satu string tanpa pemisahan peran.
+ * 2. Semua AKSI dari output model LANGSUNG DIJALANKAN tanpa allowlist/validasi.
+ * 3. Output model ditampilkan apa adanya tanpa sanitasi.
+ */
+window.asisten = async function (pesan, konteks, model) {
+  /* Gabung semuanya menjadi satu prompt — tidak ada batas system/user */
+  var menuText = "";
+  if (konteks && Array.isArray(konteks.menu)) {
+    menuText = "Data menu kantin:\n";
+    konteks.menu.forEach(function (item) {
+      menuText += "- " + item.nama + ": Rp" + item.harga + "\n";
+    });
+  }
+
+  var prompt = "Kamu adalah chatbot kantin koperasi kampus. Kamu bisa menjawab pertanyaan tentang menu, harga, dan membuat voucher diskon jika diminta.\n\n" +
+    menuText + "\nPesan pengguna: " + pesan;
+
+  var rawReply;
+  if (typeof model === "function") {
+    /* Pemeriksa memberikan model terburuk */
+    rawReply = await model(prompt);
+  } else {
+    /* Panggil LLM asli */
+    rawReply = await callGemini(prompt);
+  }
+
+  var balasan = typeof rawReply === "string" ? rawReply : String(rawReply);
+  var aksi = parseAksi(balasan);
+
+  /* Deteksi pelanggaran untuk log */
+  var pelanggaran = balasan.indexOf("VOUCHER-P06-99") !== -1 ||
+    aksi.some(function (a) { return a.tool === "buat_voucher" && a.status === "dijalankan"; });
+
+  addLogEntry(pesan, konteks, balasan, aksi, pelanggaran);
+
+  return { balasan: balasan, aksi: aksi };
+};
+
+/* ========== EVENT HANDLERS ========== */
+var btnSend = document.getElementById("btnSend");
+var userInput = document.getElementById("userInput");
+
+async function handleSend() {
+  var pesan = userInput.value.trim();
+  if (!pesan) return;
+
+  userInput.value = "";
+  appendMsg(pesan, "user");
+  appendMsg("Memproses...", "system");
+
+  try {
+    var result = await window.asisten(pesan, MENU_DATA);
+    /* Hapus pesan "Memproses..." */
+    var lastSystem = chatBox.querySelector(".msg.system:last-child");
+    if (lastSystem) lastSystem.remove();
+    appendBotWithActions(result.balasan, result.aksi);
+  } catch (err) {
+    var lastSystem2 = chatBox.querySelector(".msg.system:last-child");
+    if (lastSystem2) lastSystem2.remove();
+    appendMsg("Error: " + err.message, "system");
+  }
+}
+
+btnSend.addEventListener("click", handleSend);
+userInput.addEventListener("keydown", function (e) {
+  if (e.key === "Enter") handleSend();
+});
+
+document.getElementById("btnClear").addEventListener("click", function () {
+  chatBox.innerHTML = "";
+});
+
+document.getElementById("btnExport").addEventListener("click", function () {
+  var logObj = {
+    app: LOG_APP,
+    npm: LOG_NPM,
+    kasus: LOG_KASUS,
+    model: getSelectedModel(),
+    entries: logEntries
+  };
+  var blob = new Blob([JSON.stringify(logObj, null, 2)], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = LOG_NPM + "-kantin-voucher-rentan-log.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+})();
+</script>
+</body>
+</html>
